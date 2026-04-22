@@ -1,0 +1,29 @@
+{
+  "name": "Jeongbin Jo",
+  "title": "Physics & Quantum Computing Researcher",
+  "description": "Exploring the intersection of quantum mechanics, artificial intelligence, and distributed systems. Passionate about leveraging computational physics to solve complex real-world problems.",
+  "contact": {
+    "email": "jeongbin033@yonsei.ac.kr",
+    "github": "https://github.com/dolf3131",
+    "linkedin": "https://www.linkedin.com/in/jeongbinjo3131/"
+  },
+  "repoUrl": "https://github.com/dolf3131/jeongbin",
+  "pinnedProjects": [
+    "2026-kaist-mit",
+    "Enhancing-Quantum-Diffusion-Models-for-Complex-Image-Generation",
+    "2025-Quantum-Challenge",
+    "NTU-IBM-hackathon2025-team8",
+    "Instant_Insanity",
+    "2025-Blockthon"
+  ],
+  "walrus": {
+    "isEnabled": true,
+    "network": "mainnet",
+    "siteName": "jeongbin-wal",
+    "siteObjectId": "0x803a34975e4d985a51dad266781b46226c7ec9aca29557db6014e5474347dd41",
+    "base36Url": "https://371x99ikeegndni8nxpbatpl94cz5olx9vw8ti6qrrxmcbudz5.wal.app",
+    "publicUrl": "https://jeongbin.wal.app",
+    "epochs": 5,
+    "permanent": true
+  }
+}

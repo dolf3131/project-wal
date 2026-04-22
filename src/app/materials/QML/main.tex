@@ -1,0 +1,1014 @@
+\documentclass[aps, reprint, twocolumn, superscriptaddress, floatfix]{revtex4-2}
+
+% --- Writing Packages ---
+\usepackage{amsmath, amssymb}
+\let\Bbbk\relax % Avoid conflict with newtxmath
+\usepackage{newtxmath, newtxtext} % Load after amsmath
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{tikz-3dplot}
+\usetikzlibrary{arrows.meta, angles, quotes, topaths, shadings, decorations.markings}
+\usepackage{quantikz}      % Quantum circuit diagrams
+\usepackage{booktabs}
+\usepackage{tikzorbital}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{braket}      % Dirac notation: \ket{}, \bra{}, \braket{}
+\usepackage{physics}     % \tr, \norm, \abs, etc.
+\usepackage{mathtools}   % \coloneqq, dcases, etc.
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+% --- Custom Environments ---
+% Postulate / Theorem statement block (replaces \begin{quote})
+\newenvironment{statement}{%
+  \par\addvspace{5pt}%
+  \noindent\rule{\linewidth}{0.4pt}\nopagebreak\par\vspace{2pt}%
+  \noindent\begingroup\small\itshape}{%
+  \endgroup\par\vspace{2pt}\nopagebreak%
+  \noindent\rule{\linewidth}{0.4pt}\par\addvspace{5pt}}
+
+% Proof-sketch environment (avoids amsthm/RevTeX conflict)
+\newenvironment{proofsketch}[1][Sketch of proof]{%
+  \par\smallskip\noindent\textit{#1.}\enspace}{%
+  \hspace*{\fill}$\lozenge$\par\smallskip}
+
+\usepackage{style} % Style definitions only
+
+\begin{document}
+
+\preprint{STA4121. QUANTUM MACHINE LEARNING}
+
+\title{An Introduction to Quantum Machine Learning}
+
+\author{Jeongbin Jo}
+\email{jeongbin033@yonsei.ac.kr}
+\affiliation{Department of Physics, Yonsei University, Seoul, 03722, Republic of Korea}
+
+\date{\today}
+
+\begin{abstract}
+Quantum machine learning (QML) sits at the intersection of quantum information
+science and modern artificial intelligence, offering a promising route toward
+computational advantages that are inaccessible by classical means alone.
+This report provides a self-contained introduction to the theoretical foundations
+necessary to understand and critically evaluate QML proposals.  Starting from the
+postulates of quantum mechanics---state, dynamics, and measurement---we develop
+the quantum circuit model with single- and multi-qubit gates, establish the
+universality of quantum gate sets, and examine the no-cloning theorem and
+elementary quantum communication protocols.  We then discuss reversible
+computation, Landauer's principle, the Hadamard and swap tests with complete
+circuit derivations, and the basics of quantum computational complexity,
+culminating in an overview of landmark QML algorithms (HHL, QPCA, QSVM) and the
+central open questions surrounding quantum advantage in machine learning tasks.
+Throughout, formal derivations are presented at a level of detail beyond standard
+textbook treatments, with the aim of equipping the reader with both intuition and
+rigorous mathematical foundations.
+\end{abstract}
+
+\maketitle
+\thispagestyle{fancytitle}
+% --- Watermark (Seal) ---
+\addwatermark
+
+\onecolumngrid  % 여기서부터 1단 시작
+\vspace{-1cm}
+\tableofcontents
+\vspace{1cm}    % 목차와 본문 사이 간격 조정
+\twocolumngrid  % 여기서부터 다시 2단 시작
+
+% ============================================================
+\section{Introduction}
+\label{sec:introduction}
+% ============================================================
+
+\subsection{Motivation: The Age of Quantum Computing}
+\label{ssec:motivation}
+
+For over half a century, classical computing has followed Moore's Law: the
+number of transistors on a microprocessor doubles approximately every two years,
+delivering exponential growth in computational power at constant cost
+\cite{preskill2018quantum}.  However, as transistor feature sizes approach
+atomic dimensions, quantum mechanical effects such as tunneling and thermal
+fluctuations undermine deterministic switching.  This physical barrier signals
+the end of the classical scaling era and motivates the search for radically
+different computational paradigms.
+
+Quantum computing exploits the principles of quantum mechanics---superposition,
+entanglement, and interference---to represent and process information in ways
+that classical computers cannot efficiently simulate.  A classical register of
+$n$ bits can store exactly one of $2^n$ binary strings at any given time.  By
+contrast, an $n$-qubit quantum register can exist in a superposition of all
+$2^n$ computational basis states simultaneously (see Postulate~I in 
+Section~\ref{ssec:state} for a formal definition).
+The amplitudes $\{\alpha_x\}$ encode correlations across an exponentially large
+state space, and unitary operations manipulate all $2^n$ amplitudes in
+parallel---a wave-like processing step.  Measurement then collapses this
+superposition, yielding a bit-string $x$ with probability $|\alpha_x|^2$---a
+particle-like readout step.  This \emph{analog-digital duality} underlies the
+power of quantum computing \cite{nielsen2010quantum}.
+
+\subsection{Classical vs.\ Quantum Information}
+\label{ssec:classical-vs-quantum}
+
+Classical information theory studies the representation, compression, and
+transmission of information encoded in discrete, deterministic symbols
+\cite{wilde2017quantum}.  A probabilistic extension replaces each bit state by a
+probability distribution $\mathbf{p} = (p_0, p_1)^\top$, $p_0 + p_1 = 1$,
+$p_i \ge 0$.  Operations on probabilistic bits are described by stochastic
+matrices---matrices whose columns are probability vectors.
+
+Quantum information theory is a mathematical generalization of classical
+probabilistic information.  Specifically, whereas classical transitions are
+modeled by a \emph{Markov chain} where a stochastic matrix $M$ acts on a
+probability vector $\mathbf{x}$, quantum transitions are governed by
+\emph{unitary evolution} where a unitary matrix $U$ acts on a ket state 
+$\ket{\psi}$. The key correspondences are summarized below:
+\begin{center}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+ & Classical (Markov) & Quantum (Unitary) \\
+\midrule
+State & Prob.\ vector $\mathbf{x} \in \mathbb{R}_{+}^{d}$ & Ket $\ket{\psi} \in \mathbb{C}^{d}$ \\
+Normalization & $L_1$ norm ($\sum x_i = 1$) & $L_2$ norm ($\sum |\alpha_i|^2 = 1$) \\
+Evolution & Stochastic $M$ ($\sum_i M_{ij} = 1$) & Unitary $U$ ($U^\dagger U = \mathbf{I}$) \\
+Observation & Sampling from $\mathbf{x}$ & Born-rule measurement \\
+\bottomrule
+\end{tabular}}
+\end{center}
+This structural analogy reveals that quantum mechanics is, in a precise sense, a
+\emph{complex-amplitude} generalization of probability theory \cite{watrous2018theory}.
+The crucial difference is that complex amplitudes can interfere constructively and
+destructively---classical probabilities cannot.  Interference is the key
+resource exploited by quantum algorithms to suppress wrong answers and amplify
+correct ones \cite{nielsen2010quantum}.
+
+\subsection{Machine Learning as an Optimization Problem}
+\label{ssec:ml-opt}
+
+Machine Learning (ML) aims to enable computers to learn underlying properties of
+data to perform tasks without explicit programming. Mathematically, ML represents
+an optimization problem where we search for a model $f(z,x)$ parameterized by $z$
+that minimizes an expected loss $L$ over a data distribution $\mathcal{D}$
+\cite{schuld2021machine}:
+\begin{equation}
+  \min_{z \in \Omega} \mathbb{E}_{x \sim \mathcal{S}} \bigl\{ L[f(z, x)] \bigr\},
+\end{equation}
+where $\mathcal{S} = \{x_i\}_{i=1}^m \sim \mathcal{D}$ is the available sample.
+Typical objective functions can be derived from the principle of 
+\emph{Maximum Likelihood Estimation} (MLE). For a dataset $Y = \{y_1, \dots, y_m\}$,
+the log-likelihood $L(\theta)$ is maximized:
+\begin{equation}
+  \max_{\theta} L(\theta) = \sum_{i=1}^m \log(p(y_i | x_i, \theta)).
+\end{equation}
+Under the assumption of i.i.d.\ Gaussian noise $\epsilon \sim \mathcal{N}(0, \sigma^2)$
+in observations $y_i = f(x_i, \theta) + \epsilon$, MLE is equivalent to minimizing
+the sum of squared errors (SSE/MSE):
+\begin{equation}
+  L(\theta) \propto -\sum_{i=1}^m (y_i - f(x_i, \theta))^2 + \text{const}.
+\end{equation}
+Similarly, for classification tasks with Bernoulli labels $y_i \in \{0, 1\}$, 
+MLE yields the cross-entropy loss function:
+\begin{equation}
+  L(\theta) = \sum_{i=1}^m \bigl[ y_i \log \theta_i + (1-y_i) \log (1-\theta_i) \bigr].
+\end{equation}
+
+\subsection{Scope and Organization of This Report}
+\label{ssec:scope}
+
+This report covers the foundational material of STA4121 (Lectures 1--6) at a
+level of mathematical detail intended to complement and, in key derivations,
+surpass standard textbook treatments.  The organization is as follows.
+Section~\ref{sec:introduction} introduces the motivation and the machine 
+learning optimization framework. Section~\ref{sec:math} reviews prerequisites 
+including Dirac notation, computational complexity, and classical information theory.
+Section~\ref{sec:postulates} develops the three postulates of quantum mechanics.
+Section~\ref{sec:multiqubit} treats entanglement and density matrices.
+Section~\ref{sec:circuits} introduces the quantum circuit model and 
+elementary protocols including Superdense Coding and Teleportation.
+Section~\ref{sec:reversibility} discusses reversible computation, 
+Landauer's principle, and the Hadamard/swap tests.
+Section~\ref{sec:qml} gives an overview of key QML algorithms.
+Section~\ref{sec:conclusion} concludes.
+
+% ============================================================
+\section{Mathematical Preliminaries}
+\label{sec:math}
+% ============================================================
+
+\subsection{Dirac Notation and Hilbert Space}
+\label{ssec:dirac}
+
+All quantum states live in a complex Hilbert space $\mathcal{H}$, a complete
+inner-product space over $\mathbb{C}$.  Following Dirac's notation:
+\begin{itemize}
+  \item A \emph{ket} $\ket{\psi} \in \mathcal{H}$ is a column vector representing
+        a quantum state.
+  \item A \emph{bra} $\bra{\psi} = \ket{\psi}^\dagger$ is the conjugate-transpose
+        row vector.
+  \item The \emph{inner product} $\braket{\phi|\psi} \in \mathbb{C}$ satisfies
+        linearity in the second argument and $\braket{\psi|\psi} \ge 0$, with
+        equality iff $\ket{\psi} = 0$.
+  \item The \emph{outer product} $\ket{\psi}\bra{\phi}$ is a linear operator on
+        $\mathcal{H}$.
+\end{itemize}
+For an $n$-qubit system, $\mathcal{H} = \mathbb{C}^{2^n}$ with the standard
+inner product $\braket{\phi|\psi} = \sum_x \phi_x^* \psi_x$.  The
+\emph{computational basis} $\{\ket{x}\}_{x \in \{0,1\}^n}$ is the set of
+standard basis vectors, which forms a complete orthonormal set satisfying
+$\braket{x|y} = \delta_{xy}$ and $\sum_x \ket{x}\bra{x} = \mathbf{I}$.
+
+\subsection{Asymptotic Complexity Notation}
+\label{ssec:complexity-notation}
+
+In the analysis of both classical and quantum algorithms, it is essential to characterize how the computational cost (time or space) scales with the input size $N$ as $N \to \infty$ \cite{bernstein1997quantum}.
+\begin{enumerate}
+    \item \textbf{Big-O ($O$)}: $f(N) = O(g(N))$ if there exist constants $c, N_0 > 0$ such that $f(N) \le c \cdot g(N)$ for all $N \ge N_0$. This provides an \emph{upper bound} on growth.
+    \item \textbf{Big-Omega ($\Omega$)}: $f(N) = \Omega(g(N))$ if $f(N) \ge c \cdot g(N)$ for all $N \ge N_0$. This provides a \emph{lower bound}.
+    \item \textbf{Big-Theta ($\Theta$)}: $f(N) = \Theta(g(N))$ if $f(N) = O(g(N))$ and $f(N) = \Omega(g(N))$. This represents a \emph{tight bound}.
+    \item \textbf{Little-o ($o$)} and \textbf{Little-omega ($\omega$)}: Used for strict upper and lower bounds, respectively.
+\end{enumerate}
+An algorithm is generally considered \emph{efficient} if its complexity is polynomial in $N$, i.e., $O(N^k)$ for some constant $k$. Key examples include:
+\begin{itemize}
+    \item Inner product $\mathbf{x}^\top\mathbf{y}$ costs $O(N)$.
+    \item Matrix-vector product $A\mathbf{x}$ costs $O(MN)$ for $A\in\mathbb{R}^{M\times N}$.
+    \item Classical matrix inversion costs $O(N^3)$, while the HHL algorithm offers an exponential speedup to $O(\text{poly}\log N)$ for sparse, well-conditioned systems \cite{harrow2009quantum}.
+\end{itemize}
+
+\subsection{Classical Information: Probabilistic States and Stochastic Matrices}
+\label{ssec:classical-info}
+
+Let $\mathcal{S} = \{0,1\}$ denote the classical state set of a bit $X$.
+A \emph{probabilistic state} of $X$ is a column vector
+$\mathbf{p} = (p_0, p_1)^\top \in \mathbb{R}^2$ where $p_a = \Pr(X = a)$, so
+$p_0, p_1 \ge 0$ and $p_0 + p_1 = 1$.
+
+A \emph{deterministic operation} mapping $a \mapsto f(a)$ is represented by the
+matrix $M$ satisfying $M\ket{a} = \ket{f(a)}$ for all $a \in \mathcal{S}$.
+A \emph{probabilistic operation} introducing randomness is represented by a
+\emph{stochastic matrix}: a matrix $M$ satisfying $M_{ij} \ge 0$ and $\sum_i
+M_{ij} = 1$ for all $j$.  Stochastic matrices are exactly those that map
+probability vectors to probability vectors.  Composition of operations:
+\begin{equation}
+  \mathbf{p} \xrightarrow{M_1} M_1 \mathbf{p} \xrightarrow{M_2}
+  M_2 M_1 \mathbf{p},
+\end{equation}
+and the product $M_2 M_1$ is again stochastic.
+
+
+% ============================================================
+\section{Postulates of Quantum Mechanics}
+\label{sec:postulates}
+% ============================================================
+
+\subsection{Postulate I: State}
+\label{ssec:state}
+
+\begin{statement}
+\textbf{Postulate I (State).}
+Any isolated physical system is completely described by a unit vector
+$\ket{\psi}$ in a complex Hilbert space $\mathcal{H}$, called the state space.
+For an $n$-qubit system $\mathcal{H}=\mathbb{C}^{2^n}$ and $\braket{\psi|\psi}=1$.
+\end{statement}
+
+For a single qubit, $\mathcal{H} = \mathbb{C}^2$ and the most general state is
+\begin{equation}
+  \ket{\psi} = \alpha\ket{0} + \beta\ket{1}, \quad
+  \alpha,\beta \in \mathbb{C}, \quad
+  |\alpha|^2 + |\beta|^2 = 1.
+  \label{eq:qubit}
+\end{equation}
+
+\paragraph{Bloch sphere parameterization.}
+Writing $\alpha = e^{i\gamma}\cos(\theta/2)$ and
+$\beta = e^{i(\gamma+\phi)}\sin(\theta/2)$, the global phase $e^{i\gamma}$ is
+physically unobservable (it cancels in every Born-rule probability
+$p(m)=|\bra{m}\ket{\psi}|^2$).  Absorbing it, the canonical form is
+\begin{equation}
+  \ket{\psi} = \cos\!\tfrac{\theta}{2}\ket{0} + e^{i\phi}\sin\!\tfrac{\theta}{2}\ket{1},
+  \quad \theta \in [0,\pi],\;\phi \in [0,2\pi).
+  \label{eq:bloch}
+\end{equation}
+The pair $(\theta,\phi)$ defines a point on the unit sphere---the
+\emph{Bloch sphere}---giving a bijective correspondence between physically
+distinct pure single-qubit states and $S^2$.  Antipodal points correspond to
+orthogonal states: the poles $\ket{0}$ and $\ket{1}$ are mutually orthogonal.
+
+\begin{proofsketch}
+We verify Eq.~\eqref{eq:bloch} represents all and only unit vectors (up to global phase).
+Any $(\alpha,\beta) \in \mathbb{C}^2$ with $|\alpha|^2+|\beta|^2=1$ can be written
+as $\alpha = r_0 e^{i\phi_0}$, $\beta = r_1 e^{i\phi_1}$ with $r_0^2+r_1^2=1$, $r_i\ge 0$.
+Setting $r_0=\cos(\theta/2)$, $r_1=\sin(\theta/2)$ (unique for $\theta\in[0,\pi]$),
+and factoring out $e^{i\phi_0}$ as the global phase gives $\phi = \phi_1-\phi_0$.
+The parameterization is surjective onto the sphere and two-to-one only at the poles
+($\theta=0,\pi$), where $\phi$ is irrelevant---consistent with $\ket{0},\ket{1}$
+being pole states. $\lozenge$
+\end{proofsketch}
+
+\subsection{Postulate II: Dynamics}
+\label{ssec:dynamics}
+
+\begin{statement}
+\textbf{Postulate II (Dynamics).}
+The time evolution of a closed quantum system is governed by the
+Schr\"{o}dinger equation
+$i\hbar\,\partial_t\ket{\psi(t)} = H(t)\ket{\psi(t)}$,
+where $H(t)$ is the Hermitian Hamiltonian of the system.
+Equivalently, $\ket{\psi(t)} = U(t)\ket{\psi(0)}$ for some unitary $U(t)$.
+\end{statement}
+
+\paragraph{General solution via Dyson series.}
+Formally integrating the Schr\"{o}dinger equation gives
+\begin{align}
+  \ket{\psi(t)} &= \mathcal{T}\exp\!\left(-\frac{i}{\hbar}\int_0^t H(t')\,dt'\right)\ket{\psi(0)},
+  \label{eq:dyson}
+\end{align}
+where $\mathcal{T}$ denotes time-ordering.  For a \emph{time-independent}
+Hamiltonian $H(t) = H$, the series resums exactly:
+\begin{equation}
+  \ket{\psi(t)} = e^{-iHt/\hbar}\ket{\psi(0)} \eqqcolon U(t)\ket{\psi(0)}.
+  \label{eq:time-indep}
+\end{equation}
+
+\begin{proofsketch}
+Split $[0,t]$ into $L$ equal intervals of width $\delta=t/L$.  For small $\delta$,
+$U(\delta)\approx I - i H\delta/\hbar$.  The total evolution is
+$U(t)\approx (I-iH\delta/\hbar)^L \xrightarrow{L\to\infty} e^{-iHt/\hbar}$
+by the definition of the matrix exponential.  Hermiticity of $H$ gives
+$U^\dagger = e^{iH^\dagger t/\hbar} = e^{iHt/\hbar}$, hence
+$U^\dagger U = e^{iHt/\hbar}e^{-iHt/\hbar} = I$, confirming unitarity. $\lozenge$
+\end{proofsketch}
+
+\paragraph{Spectral form and inner-product preservation.}
+Since $H$ is Hermitian, its spectral decomposition reads
+$H = \sum_k E_k \ket{E_k}\bra{E_k}$, giving
+\begin{equation}
+  U(t) = \sum_k e^{-iE_k t/\hbar} \ket{E_k}\bra{E_k}.
+\end{equation}
+Because $|e^{-iE_k t/\hbar}|=1$, the evolution merely rotates phases; it preserves
+the norm and inner product:
+$\braket{\psi(t)|\phi(t)} = \bra{\psi(0)}U^\dagger U\ket{\phi(0)} = \braket{\psi(0)|\phi(0)}$.
+
+\paragraph{Circuit model.}
+In quantum computing we set $\hbar = 1$.  A quantum circuit decomposes
+$U = U_L \cdots U_2 U_1$ where each $U_k$ acts on one or two qubits.  Because a product
+of unitaries is unitary ($(VU)^\dagger(VU)=U^\dagger V^\dagger V U= I$),
+every circuit realizes a valid unitary.
+
+\subsection{Postulate III: Measurement}
+\label{ssec:measurement}
+
+\begin{statement}
+\textbf{Postulate III (Measurement).}
+Quantum measurements are described by a collection $\{M_m\}$ of measurement
+operators satisfying the completeness relation $\sum_m M_m^\dagger M_m = \mathbf{I}$.
+If the pre-measurement state is $\ket{\psi}$, the outcome $m$ occurs with
+probability $p(m) = \bra{\psi}M_m^\dagger M_m\ket{\psi}$, and the
+post-measurement state is $M_m\ket{\psi}/\sqrt{p(m)}$.
+\end{statement}
+
+\paragraph{Projective measurements.}
+A \emph{projective} (von Neumann) measurement is associated with a Hermitian
+observable $\mathcal{O} = \sum_m \mu_m P_m$, where $\mu_m$ are real eigenvalues
+and $P_m = \ket{\mu_m}\bra{\mu_m}$ are orthogonal projectors:
+$P_m P_{m'} = \delta_{mm'} P_m$, $\sum_m P_m = \mathbf{I}$.
+Setting $M_m = P_m$:
+\begin{equation}
+  p(\mu_m) = \braket{\psi|P_m|\psi}, \qquad
+  \ket{\psi'} = \frac{P_m\ket{\psi}}{\sqrt{p(\mu_m)}}.
+\end{equation}
+
+\paragraph{Expectation value.}
+\begin{equation}
+  \langle\mathcal{O}\rangle = \sum_m \mu_m p(\mu_m)
+    = \bra{\psi}\mathcal{O}\ket{\psi}
+    = \operatorname{Tr}(\mathcal{O}\,\ket{\psi}\bra{\psi}).
+  \label{eq:expectation}
+\end{equation}
+The second equality follows from
+$\sum_m \mu_m\braket{\psi|P_m|\psi} = \bra{\psi}(\sum_m \mu_m P_m)\ket{\psi}$.
+The third uses the cyclic property of the trace.
+
+\paragraph{Computational basis measurement.}
+Setting $M_m = \ket{m}\bra{m}$ for $m \in \{0,1\}^n$ and
+$\ket{\psi} = \sum_x \alpha_x\ket{x}$, outcome $m$ occurs with probability
+$|\alpha_m|^2$, and the post-measurement state collapses to $\ket{m}$.
+
+% ============================================================
+\section{Multi-Qubit Systems}
+\label{sec:multiqubit}
+% ============================================================
+
+\subsection{Composite Systems and Tensor Products}
+\label{ssec:composite}
+
+\begin{statement}
+\textbf{Postulate IV (Composite Systems).}
+The state space of a composite physical system is the tensor product
+$\mathcal{H}_1 \otimes \cdots \otimes \mathcal{H}_n$ of the component Hilbert spaces.
+If subsystem $k$ is in state $\ket{\psi_k}$, the joint state is
+$\ket{\psi_1}\otimes\cdots\otimes\ket{\psi_n}$.
+\end{statement}
+
+For two qubits with $\ket{\psi_1} = \alpha_1\ket{0}+\beta_1\ket{1}$ and
+$\ket{\psi_2} = \alpha_2\ket{0}+\beta_2\ket{1}$, the joint state is
+\begin{align}
+  \ket{\psi_1}\otimes\ket{\psi_2} &=
+    \alpha_1\alpha_2\ket{00} + \alpha_1\beta_2\ket{01} \nonumber \\
+    &\quad + \beta_1\alpha_2\ket{10} + \beta_1\beta_2\ket{11},
+  \label{eq:product}
+\end{align}
+which coincides with the Kronecker product of the column vectors.  An $n$-qubit
+Hilbert space has dimension $2^n$, growing exponentially---the root of both the
+power and the classical-simulation difficulty of quantum computation.
+
+\subsection{Quantum Entanglement}
+\label{ssec:entanglement}
+
+A bipartite state $\ket{\Psi} \in \mathcal{H}_A \otimes \mathcal{H}_B$ is
+\emph{separable} if $\ket{\Psi} = \ket{\psi_A}\otimes\ket{\psi_B}$;
+otherwise it is \emph{entangled}.  The four \emph{Bell states},
+\begin{align}
+  \ket{\Phi^{\pm}} &= \tfrac{1}{\sqrt{2}}(\ket{00} \pm \ket{11}), \\
+  \ket{\Psi^{\pm}} &= \tfrac{1}{\sqrt{2}}(\ket{01} \pm \ket{10}),
+\end{align}
+are maximally entangled two-qubit states and form an orthonormal basis for
+$\mathbb{C}^4$ (the Bell basis).
+
+\paragraph{Schmidt decomposition and separability criterion.}
+Any $\ket{\Psi} \in \mathcal{H}_A \otimes \mathcal{H}_B$ admits the
+\emph{Schmidt decomposition}
+\begin{equation}
+  \ket{\Psi} = \sum_k \sqrt{\lambda_k}\, \ket{a_k}\ket{b_k},
+  \quad \lambda_k \ge 0,\quad \sum_k \lambda_k = 1,
+  \label{eq:schmidt}
+\end{equation}
+where $\{\ket{a_k}\}$ and $\{\ket{b_k}\}$ are orthonormal.  The Schmidt rank
+(number of non-zero $\lambda_k$) characterizes entanglement: a state is separable
+iff its Schmidt rank is 1.
+
+\begin{proofsketch}
+Represent $\ket{\Psi}$ as a matrix $M_{ij} = \alpha_{ij}$ via
+$\ket{\Psi}=\sum_{i,j}\alpha_{ij}\ket{a_i}\ket{b_j}$.  Applying the singular
+value decomposition (SVD) $M = U\Sigma V^\dagger$ gives
+$\ket{\Psi}=\sum_k \sigma_k \ket{\tilde{a}_k}\ket{\tilde{b}_k}$ where
+$\ket{\tilde{a}_k}=\sum_i U_{ik}\ket{a_i}$ and
+$\ket{\tilde{b}_k}=\sum_j V^*_{jk}\ket{b_j}$ are new orthonormal sets.
+Setting $\sqrt{\lambda_k}=\sigma_k$ and normalizing completes the proof. $\lozenge$
+\end{proofsketch}
+
+\subsection{Partial Measurement}
+\label{ssec:partial}
+
+Consider a two-qubit state $\ket{\Psi} = \sum_{i,j} \alpha_{ij}\ket{ij}$ with
+$\sum_{i,j}|\alpha_{ij}|^2=1$.  Measuring only the first qubit with
+$M_0 = \ket{0}\bra{0}\otimes\mathbf{I}$ and $M_1 = \ket{1}\bra{1}\otimes\mathbf{I}$:
+\begin{itemize}
+  \item Outcome $0$ with probability
+        $p(0) = |\alpha_{00}|^2 + |\alpha_{01}|^2$;
+        post-state $\ket{0}\otimes\frac{\alpha_{00}\ket{0}+\alpha_{01}\ket{1}}{\sqrt{p(0)}}$.
+  \item Outcome $1$ with probability
+        $p(1) = |\alpha_{10}|^2 + |\alpha_{11}|^2$;
+        post-state $\ket{1}\otimes\frac{\alpha_{10}\ket{0}+\alpha_{11}\ket{1}}{\sqrt{p(1)}}$.
+\end{itemize}
+Notably, if $\ket{\Psi}=\ket{\Phi^+}$, measuring the first qubit and obtaining
+$0$ instantly collapses the second qubit to $\ket{0}$, regardless of distance.
+This is \emph{not} superluminal signaling: the outcome probabilities are always $1/2$.
+
+\subsection{Pauli Matrices}
+\label{ssec:pauli}
+
+The Pauli matrices
+\begin{equation}
+  X = \begin{pmatrix}0&1\\1&0\end{pmatrix}, \quad
+  Y = \begin{pmatrix}0&-i\\i&0\end{pmatrix}, \quad
+  Z = \begin{pmatrix}1&0\\0&-1\end{pmatrix}
+  \label{eq:pauli}
+\end{equation}
+together with $I\equiv\sigma_0$ satisfy $P^2=I$, $[X,Y]=2iZ$ (and cyclic),
+and $\{P,Q\}=2\delta_{PQ}I$.  The set $\mathcal{P}_n = \{I,X,Y,Z\}^{\otimes n}$
+(with phases $\{\pm 1,\pm i\}$) forms the $n$-qubit Pauli group and provides a
+basis for $2^n\times 2^n$ Hermitian matrices.  This makes Pauli operators the
+natural language for quantum error correction and VQA cost functions.
+
+\subsection{Density Matrix Formalism}
+\label{ssec:density}
+
+When the state of a system is only known probabilistically---system is in
+$\ket{\psi_k}$ with probability $p_k$---the \emph{density operator}
+\begin{equation}
+  \rho = \sum_k p_k \ket{\psi_k}\bra{\psi_k}
+  \label{eq:density}
+\end{equation}
+provides a complete description.  Key properties:
+(i) $\rho \ge 0$,
+(ii) $\operatorname{Tr}(\rho) = 1$,
+(iii) $\operatorname{Tr}(\rho^2) \le 1$, with equality iff $\rho$ is pure.
+Under unitary evolution, $\rho \to U\rho U^\dagger$.  Under measurement $\{M_m\}$:
+\begin{equation}
+  p(m) = \operatorname{Tr}(M_m^\dagger M_m \rho), \qquad
+  \rho' = \frac{M_m \rho M_m^\dagger}{p(m)}.
+\end{equation}
+The expectation value generalizes Eq.~\eqref{eq:expectation} to
+$\langle\mathcal{O}\rangle = \operatorname{Tr}(\mathcal{O}\rho)$.
+
+\subsection{Reduced Density Matrix and Partial Trace}
+\label{ssec:reduced-density}
+
+A central problem in quantum information is describing a subsystem $A$ of a composite system $AB$ when we lack access to system $B$. If the joint system is in state $\rho_{AB}$, the \emph{reduced density matrix} $\rho_A$ is defined via the \emph{partial trace} over $B$:
+\begin{equation}
+  \rho_A \equiv \operatorname{Tr}_B(\rho_{AB}) = \sum_j \bra{j}_B \rho_{AB} \ket{j}_B,
+  \label{eq:partial-trace}
+\end{equation}
+where $\{\ket{j}_B\}$ is any orthonormal basis for $\mathcal{H}_B$.
+
+\paragraph{Proof of Physical Consistency.}
+The reduced density matrix $\rho_A$ is the unique operator that correctly predicts the expectation values of all local observables $O_A$ on system $A$.
+\begin{proofsketch}
+Let $O = O_A \otimes I_B$ be an observable acting only on system $A$. Its expectation value in state $\rho_{AB}$ is:
+\begin{align}
+  \langle O_A \otimes I_B \rangle &= \operatorname{Tr}\bigl((O_A \otimes I_B) \rho_{AB}\bigr) \nonumber \\
+  &= \sum_i \sum_j \bra{i}_A \bra{j}_B (O_A \otimes I_B) \rho_{AB} \ket{i}_A \ket{j}_B \nonumber \\
+  &= \sum_i \bra{i}_A O_A \underbrace{\left( \sum_j \bra{j}_B \rho_{AB} \ket{j}_B \right)}_{\operatorname{Tr}_B(\rho_{AB})} \ket{i}_A \nonumber \\
+  &= \sum_i \bra{i}_A O_A \rho_A \ket{i}_A = \operatorname{Tr}(O_A \rho_A). \nonumber
+\end{align}
+This identity proves that $\rho_A$ contains all information necessary to describe local experiments on $A$ \cite{wilde2017quantum}. $\lozenge$
+\end{proofsketch}
+
+\paragraph{Entanglement and Mixedness.}
+Consider the maximally entangled Bell state $\ket{\Phi^+} = \tfrac{1}{\sqrt{2}}(\ket{00}+\ket{11})$. Its joint density matrix is $\rho_{AB} = \ket{\Phi^+}\bra{\Phi^+}$. Computing the partial trace over $B$:
+\begin{align}
+  \rho_A &= \bra{0}_B \rho_{AB} \ket{0}_B + \bra{1}_B \rho_{AB} \ket{1}_B \nonumber \\
+  &= \tfrac{1}{2}(\ket{0}\bra{0} + \ket{1}\bra{1}) = \tfrac{1}{2}\mathbf{I}.
+\end{align}
+While the joint state $\rho_{AB}$ is pure ($\text{Tr}(\rho_{AB}^2)=1$), the reduced state $\rho_A$ is \emph{maximally mixed} ($\text{Tr}(\rho_A^2)=1/2$). This conversion of global entanglement into local classical uncertainty (entropy) is a hallmark of quantum correlations \cite{nielsen2010quantum}.
+
+% ============================================================
+\section{Quantum Circuit Model}
+\label{sec:circuits}
+% ============================================================
+
+\subsection{Motivation: Classical Circuits}
+\label{ssec:classical-circuits}
+
+Classical digital computation is described by Boolean circuits: directed acyclic
+graphs of \emph{gates} with \emph{wires} carrying bits.  The set
+$\{\mathrm{NAND}, \mathrm{FANOUT}\}$ is universal.  However, $\mathrm{NAND}$ is
+\emph{irreversible} (many-to-one), which by Landauer's principle implies
+thermodynamic energy dissipation (Sec.~\ref{ssec:landauer}).
+
+\subsection{Single-Qubit Gates}
+\label{ssec:single-qubit}
+
+Single-qubit gates are $2\times 2$ unitary matrices.  The most important examples:
+\begin{align}
+  H &= \tfrac{1}{\sqrt{2}}\begin{pmatrix}1&1\\1&-1\end{pmatrix}, \quad
+  X = \begin{pmatrix}0&1\\1&0\end{pmatrix}, \quad
+  Z = \begin{pmatrix}1&0\\0&-1\end{pmatrix}, \\
+  S &= \begin{pmatrix}1&0\\0&i\end{pmatrix}, \quad
+  T  = \begin{pmatrix}1&0\\0&e^{i\pi/4}\end{pmatrix}, \quad T^2=S,\;S^2=Z.
+\end{align}
+Rotation gates about Bloch-sphere axes:
+\begin{equation}
+  R_{\hat{n}}(\theta) \coloneqq e^{-i\theta\hat{n}\cdot\vec{\sigma}/2}
+    = \cos\!\tfrac{\theta}{2}\,I - i\sin\!\tfrac{\theta}{2}\,\hat{n}\cdot\vec{\sigma},
+  \label{eq:rotation}
+\end{equation}
+where $\vec{\sigma} = (X,Y,Z)$.  Geometrically, $R_{\hat{n}}(\theta)$ rotates the
+Bloch-sphere vector by angle $\theta$ about the $\hat{n}$-axis.
+
+\paragraph{Euler decomposition.}
+Every single-qubit unitary $U \in SU(2)$ can be written as
+\begin{equation}
+  U = e^{i\alpha}R_z(\beta)\,R_y(\gamma)\,R_z(\delta)
+  \label{eq:euler}
+\end{equation}
+for some real $\alpha,\beta,\gamma,\delta$.
+
+\begin{proofsketch}
+Since $U$ is $2\times2$ unitary and $\det U=1$ (up to global phase), write
+$U = \bigl(\begin{smallmatrix}a & -b^* \\ b & a^*\end{smallmatrix}\bigr)$ with
+$|a|^2+|b|^2=1$.  Set $a = e^{i(\alpha-\beta/2-\delta/2)}\cos(\gamma/2)$
+and $b = e^{i(\alpha+\beta/2-\delta/2)}\sin(\gamma/2)$.
+Matching this to $R_z(\beta)R_y(\gamma)R_z(\delta)$ computed explicitly via
+Eq.~\eqref{eq:rotation} confirms the decomposition for all $U \in SU(2)$. $\lozenge$
+\end{proofsketch}
+
+A hardware-convenient parameterization for superconducting qubits is
+\begin{equation}
+  U(\theta,\phi,\lambda) = R_z(\phi)\,R_x\!\left(-\tfrac{\pi}{2}\right)\,R_z(\theta)\,R_x\!\left(\tfrac{\pi}{2}\right)\,R_z(\lambda).
+  \label{eq:ibm-u3}
+\end{equation}
+
+\subsection{Two-Qubit Gates and Entanglement Generation}
+\label{ssec:two-qubit}
+
+Product operators $U_A \otimes U_B$ cannot generate entanglement.  The canonical
+entangling gates are:
+\begin{align}
+  CX &= \ket{0}\bra{0}\otimes I + \ket{1}\bra{1}\otimes X, \\
+  CZ &= \ket{0}\bra{0}\otimes I + \ket{1}\bra{1}\otimes Z.
+\end{align}
+$CX$ flips the target conditioned on the control being $\ket{1}$.  Applying $CX$
+to $(H\ket{0})\otimes\ket{0} = \tfrac{1}{\sqrt{2}}(\ket{0}+\ket{1})\otimes\ket{0}$:
+\begin{equation}
+  CX\cdot\tfrac{1}{\sqrt{2}}(\ket{00}+\ket{10})
+  = \tfrac{1}{\sqrt{2}}(\ket{00}+\ket{11}) = \ket{\Phi^+},
+\end{equation}
+demonstrating Bell-state generation from a product state.
+
+\subsection{Universality of Quantum Gates}
+\label{ssec:universality}
+
+\begin{statement}
+\textbf{Theorem (Universality).}
+A gate set $\mathcal{G}$ is \emph{universal for quantum computation} if any
+$n$-qubit unitary can be approximated to precision $\varepsilon$ by a circuit of
+size $O\!\left(\operatorname{poly}\!\left(\log\tfrac{1}{\varepsilon}\right)\right)$ from $\mathcal{G}$.
+The set $\{H, T, CX\}$ is universal \cite{nielsen2010quantum}.
+\end{statement}
+
+\begin{proofsketch}
+The argument proceeds in two steps.
+(1) \textit{Single-qubit universality}: $H$ and $T$ together generate a dense
+subgroup of $SU(2)$---this can be shown by computing $HTH$ and checking that the
+resulting rotations are irrational multiples of $\pi$, ensuring density.
+(2) \textit{Multi-qubit reduction}: any $n$-qubit unitary can be decomposed into
+two-qubit unitaries via a sequence of controlled-$U$ gates, each decomposable into
+$CX$ and single-qubit gates (Gray-code argument).  The Solovay-Kitaev theorem then
+guarantees that approximation within $\varepsilon$ requires only
+$O(\operatorname{poly}\log(1/\varepsilon))$ gates. $\lozenge$
+\end{proofsketch}
+
+\subsection{No-Cloning Theorem}
+\label{ssec:no-cloning}
+
+\begin{statement}
+\textbf{Theorem (No-Cloning, Wootters \& Zurek 1982).}
+There is no unitary operation $U$ such that
+$U\ket{\psi}\ket{0} = \ket{\psi}\ket{\psi}$ for all $\ket{\psi}$
+\cite{wootters1982single}.
+\end{statement}
+
+\begin{proofsketch}[Proof]
+Suppose such $U$ exists and let $\ket{\psi},\ket{\phi}$ be arbitrary.  Then
+$U\ket{\psi}\ket{0} = \ket{\psi}\ket{\psi}$ and
+$U\ket{\phi}\ket{0} = \ket{\phi}\ket{\phi}$.
+Taking the inner product of both equations and using unitarity ($U^\dagger U=I$):
+\begin{equation}
+  \braket{\psi|\phi}\underbrace{\braket{0|0}}_{=1}
+  = \braket{\psi|\phi}\braket{\psi|\phi}
+  = \braket{\psi|\phi}^2.
+\end{equation}
+Hence $\braket{\psi|\phi}(\braket{\psi|\phi}-1) = 0$, forcing
+$\braket{\psi|\phi} \in \{0,1\}$.  Any two states that $U$ clones must be either
+identical or orthogonal, contradicting the assumption that $U$ clones
+\emph{all} states.
+\end{proofsketch}
+
+\paragraph{Implication for QML.}
+No-cloning forbids direct copying of unknown quantum data, restricting
+classical-style data augmentation.  It simultaneously motivates quantum-native
+protocols (superdense coding, teleportation) that exploit entanglement instead
+of copying.
+
+\subsection{Basic Quantum Protocols}
+\label{ssec:protocols}
+
+\paragraph{Superdense coding.}
+By sharing the Bell pair $\ket{\Phi^+}=\tfrac{1}{\sqrt{2}}(\ket{00}+\ket{11})$
+in advance, Alice can transmit \emph{2 classical bits} to Bob by sending only a
+\emph{single qubit} \cite{bennett1992communication}.  By applying a local unitary
+$X^a Z^b$ ($a,b \in \{0,1\}$) to her qubit, Alice can transform the globally shared
+entangled state into any of the four orthogonal Bell states.  Bob then performs
+a Bell-basis measurement to distinguish these states with 100\% certainty.
+
+\begin{figure}[h]
+\centering
+\begin{quantikz}
+  \lstick[2]{$\ket{\beta_{00}}$} & \gate{Z^b} & \gate{X^a} & \qw & \qw & \targ{} \gategroup[2,steps=3,style={dashed, rounded corners, draw=red, inner sep=2pt}, background]{Bell measurement} & \qw & \meter{} & \rstick{a} \\
+  & \qw      & \qw  & \qw & \qw & \ctrl{-1}  & \gate{H} & \meter{} & \rstick{b}
+\end{quantikz}
+\caption{Superdense coding circuit.  Alice applies local operators $Z^b$ and $X^a$ to her
+half of a shared Bell pair ($q_A$).  She then sends $q_A$ to Bob, who performs a 
+Bell-basis measurement (CNOT and $H$) to recover both bits $a, b$.}
+\label{fig:superdense}
+\end{figure}
+
+\begin{table*}[t]
+\centering
+\caption{Alice's encoding and resulting Bell states for Superdense Coding. The bit $b$ (determined by the wire with the $H$ gate) controls the $Z$ gate.}
+\label{tab:superdense}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+Requested Bits ($ba$) & Alice's Gate Logic ($X^a Z^b$) & Resulting Bell State (on wire A) & Bob's Measurement Result ($ba$) \\ \midrule
+00 & $I$  & $\ket{\Phi^+} = \tfrac{1}{\sqrt{2}}(\ket{00}+\ket{11})$ & 00 \\
+01 & $X$  & $\ket{\Psi^+} = \tfrac{1}{\sqrt{2}}(\ket{10}+\ket{01})$ & 01 \\
+10 & $Z$  & $\ket{\Phi^-} = \tfrac{1}{\sqrt{2}}(\ket{00}-\ket{11})$ & 10 \\
+11 & $XZ$ & $\ket{\Psi^-} = \tfrac{1}{\sqrt{2}}(\ket{10}-\ket{01})$ & 11 \\ \bottomrule
+\end{tabular}
+\end{table*}
+
+The protocol succeeds because the set $\{ (E_i \otimes I) \ket{\Phi^+} \}$ forms an 
+orthonormal basis for the four-dimensional Hilbert space $(\mathbb{C}^2)^{\otimes 2}$.
+Alice effectively picks which basis vector the system resides in, and Bob performs
+the change-of-basis back to the computational basis for sampling.
+
+
+\paragraph{Quantum teleportation.}
+Alice transmits an unknown qubit $\ket{\psi}=\alpha\ket{0}+\beta\ket{1}$ to Bob
+using only a shared Bell pair and two classical bits \cite{bennett1993teleporting}.
+The circuit (Fig.~\ref{fig:teleport}) evolves as follows.  The three-qubit
+initial state is
+\begin{equation}
+  \ket{\psi}\otimes\ket{\Phi^+}
+  = \tfrac{1}{\sqrt{2}}\bigl(\alpha\ket{0}+\beta\ket{1}\bigr)(\ket{00}+\ket{11}).
+\end{equation}
+After Alice applies $CX$ then $H$ on her qubits, the state becomes
+\begin{align}
+  \tfrac{1}{2}\bigl[&\ket{00}(\alpha\ket{0}+\beta\ket{1})
+                    +\ket{01}(\alpha\ket{1}+\beta\ket{0}) \nonumber\\
+                   +&\ket{10}(\alpha\ket{0}-\beta\ket{1})
+                    +\ket{11}(\alpha\ket{1}-\beta\ket{0})\bigr].
+\end{align}
+Alice measures qubits 1 and 2 and sends outcomes $(a,b)$ classically.  Bob applies
+$Z^a X^b$ to recover $\alpha\ket{0}+\beta\ket{1}=\ket{\psi}$ exactly.
+
+\begin{figure}[h]
+\centering
+\begin{quantikz}
+  \lstick{A $\ket{\psi}$} & \ctrl{1} & \gate{H} & \qw & \meter{}  & \cwbend{2}  \\
+  \lstick[2]{$\ket{\beta_{00}}$} & \targ{}  & \qw & \meter{} & \cwbend{1} \\
+  & \qw      & \qw      & \qw      & \gate{X^b} & \gate{Z^a} & \rstick{$\ket{\psi}$}
+\end{quantikz}
+\caption{Quantum teleportation circuit.  Alice performs a Bell measurement on
+her state $A$ and her half of a shared Bell pair $A$.  The outcomes $a$ and $b$ 
+are used to apply gates $X^b$ and $Z^a$ to Bob's qubit $B$, recovering $\ket{\psi}$.}
+\label{fig:teleport}
+\end{figure}
+
+\begin{table*}[t]
+\centering
+\caption{Alice's measurement outcomes and Bob's corresponding recovery gates. The bit $a$ (from the wire with $H$) controls the $Z$ gate.}
+\label{tab:teleport}
+\begin{tabular}{@{}cccc@{}}
+\toprule
+Outcome ($ba$) & Alice's Projector & Bob's Received State & Correction Logic ($Z^a X^b$) \\ \midrule
+00 & $\ket{\Phi^+}\bra{\Phi^+}$ & $\alpha\ket{0}+\beta\ket{1}$ & $I$ \\
+10 & $\ket{\Psi^+}\bra{\Psi^+}$ & $\alpha\ket{1}+\beta\ket{0}$ & $X$ \\
+01 & $\ket{\Phi^-}\bra{\Phi^-}$ & $\alpha\ket{0}-\beta\ket{1}$ & $Z$ \\
+11 & $\ket{\Psi^-}\bra{\Psi^-}$ & $\alpha\ket{1}-\beta\ket{0}$ & $ZX$ \\ \bottomrule
+\end{tabular}
+\end{table*}
+
+Importantly, the "teleportation" is not instantaneous. Although the system 
+collapses into one of the four states in Table \ref{tab:teleport} immediately 
+upon Alice's measurement, Bob cannot know which gate to apply without the two 
+classical bits.  This preserves causality and satisfies the 
+\emph{no-communication theorem}: entanglement alone cannot transmit 
+information faster than light.
+
+
+% ============================================================
+\section{Reversible Computation and Complexity}
+\label{sec:reversibility}
+% ============================================================
+
+\subsection{Landauer's Principle}
+\label{ssec:landauer}
+
+\begin{statement}
+\textbf{Landauer's Principle (1961).}
+Erasing one bit of information irreversibly dissipates at least $k_B T \ln 2$
+of energy as heat, where $k_B$ is Boltzmann's constant and $T$ is the
+temperature of the environment \cite{landauer1961irreversibility}.
+\end{statement}
+
+Since NAND (and most classical gates) are many-to-one, they are thermodynamically
+irreversible and incur this minimum energy cost.  In contrast, unitary quantum
+evolution is always reversible ($U^{-1} = U^\dagger$), satisfying Landauer's
+bound with equality in principle.
+
+\subsection{Toffoli Gate: Universal Reversible Classical Gate}
+\label{ssec:toffoli}
+
+The Toffoli (CCX) gate maps $(a, b, c) \mapsto (a, b, c \oplus ab)$.
+It is universal for reversible classical computation: both NAND and FANOUT can be
+simulated using Toffoli gates with ancilla bits.  As a quantum gate on three qubits,
+it is a $8\times 8$ permutation matrix.
+
+\paragraph{Quantum oracle for arbitrary functions.}
+Any $f:\{0,1\}^n \to \{0,1\}^m$ can be embedded into the reversible unitary
+\begin{equation}
+  U_f : \ket{x}\ket{y} \mapsto \ket{x}\ket{y \oplus f(x)},
+  \label{eq:oracle}
+\end{equation}
+where $\oplus$ denotes bitwise XOR.  Applying $U_f$ to a uniform superposition:
+\begin{equation}
+  U_f\!\left(\frac{1}{\sqrt{2^n}}\sum_x \ket{x}\right)\!\ket{0}
+  = \frac{1}{\sqrt{2^n}}\sum_x \ket{x}\ket{f(x)},
+\end{equation}
+evaluating $f$ on all $2^n$ inputs simultaneously---the key mechanism underlying
+quantum speedups via interference.
+
+\subsection{Hadamard Test and Swap Test}
+\label{ssec:hadamard-test}
+
+\paragraph{Hadamard test.}
+Given a unitary $U$ and a state $\ket{\psi}$, the Hadamard test
+(Fig.~\ref{fig:hadamard}) estimates $\langle\psi|U|\psi\rangle \in \mathbb{C}$.
+A full step-by-step derivation follows.
+
+\begin{proofsketch}[Complete derivation of Hadamard test]
+\textit{Step 1.} Initialize ancilla and system:
+$\ket{0}\ket{\psi}$.
+
+\textit{Step 2.} Apply $H$ to ancilla:
+$\tfrac{1}{\sqrt{2}}(\ket{0}+\ket{1})\ket{\psi}$.
+
+\textit{Step 3.} Apply controlled-$U$ (if ancilla is $\ket{1}$, apply $U$ to system):
+\begin{equation}
+  \tfrac{1}{\sqrt{2}}\bigl(\ket{0}\ket{\psi} + \ket{1}U\ket{\psi}\bigr).
+\end{equation}
+
+\textit{Step 4.} Apply final $H$ to ancilla:
+\begin{align}
+  &\tfrac{1}{2}\bigl[(\ket{0}+\ket{1})\ket{\psi}
+   + (\ket{0}-\ket{1})U\ket{\psi}\bigr] \nonumber\\
+  &= \tfrac{1}{2}\ket{0}(\ket{\psi}+U\ket{\psi})
+   + \tfrac{1}{2}\ket{1}(\ket{\psi}-U\ket{\psi}).
+\end{align}
+
+\textit{Step 5.} Measure ancilla.  The outcome probabilities are:
+\begin{align}
+  P(0) &= \tfrac{1}{4}\|\ket{\psi}+U\ket{\psi}\|^2
+       = \tfrac{1}{4}(2 + 2\operatorname{Re}\braket{\psi|U|\psi}), \\
+  P(1) &= \tfrac{1}{4}(2 - 2\operatorname{Re}\braket{\psi|U|\psi}).
+\end{align}
+Hence $P(0)-P(1) = \operatorname{Re}\braket{\psi|U|\psi}$.
+
+\textit{Imaginary part.} Insert an $S^\dagger$ phase gate before the final
+$H$; a parallel argument gives $P(0)-P(1) = \operatorname{Im}\braket{\psi|U|\psi}$.
+Together, both runs fully specify $\braket{\psi|U|\psi} \in \mathbb{C}$. $\lozenge$
+\end{proofsketch}
+
+\begin{figure}[h]
+\centering
+\begin{quantikz}
+  \lstick{$\ket{0}$} & \gate{H} & \ctrl{1} & \gate{H} & \meter{} & \rstick{$\sigma_z$} \\
+  \lstick{$\ket{\psi}$} & \qw & \gate{U} & \qw & \qw & \qw
+\end{quantikz}
+\caption{Hadamard test circuit.  The ancilla qubit $\ket{0}$ controls the
+unitary $U$ on the system register $\ket{\psi}$.  A final Hadamard on the
+ancilla followed by $\sigma_z$ measurement yields
+$P(0)-P(1)=\mathrm{Re}\langle\psi|U|\psi\rangle$.
+Inserting $S^\dagger$ before the final $H$ yields the imaginary part.}
+\label{fig:hadamard}
+\end{figure}
+
+\paragraph{Swap test.}
+Setting $U=\mathrm{SWAP}$ and $\ket{\psi}=\ket{\psi_1}\ket{\psi_2}$, the
+Hadamard test gives
+\begin{equation}
+  P(0)-P(1) = \langle\psi_1\psi_2|\mathrm{SWAP}|\psi_1\psi_2\rangle
+  = |\langle\psi_1|\psi_2\rangle|^2.
+\end{equation}
+The identity $\bra{\psi_1\psi_2}\mathrm{SWAP}\ket{\psi_1\psi_2}
+= \bra{\psi_1\psi_2}\ket{\psi_2\psi_1} = |\braket{\psi_1|\psi_2}|^2$
+follows directly from the action of SWAP.
+
+\begin{figure}[h]
+\centering
+\begin{quantikz}
+  \lstick{$\ket{0}$} & \gate{H}  & \ctrl{1} & \gate{H} & \meter{} \\
+  \lstick{$\ket{\psi_1}$} & \qw & \swap{1} & \qw & \qw \\
+  \lstick{$\ket{\psi_2}$} & \qw & \targX{} & \qw & \qw
+\end{quantikz}
+\caption{Swap test circuit.  A controlled-SWAP between $\ket{\psi_1}$ and
+$\ket{\psi_2}$ is mediated by the ancilla qubit.  The outcome probability
+difference satisfies $P(0)-P(1) = |\langle\psi_1|\psi_2\rangle|^2$, providing
+an efficient quantum estimate of state overlap used in kernel-based QML
+\cite{schuld2019quantum}.}
+\label{fig:swap}
+\end{figure}
+
+
+\subsection{Quantum Complexity Classes}
+\label{ssec:complexity-classes}
+
+\begin{itemize}
+  \item \textbf{BQP} (Bounded-error Quantum Polynomial time): decision problems
+    solvable by a polynomial-time quantum circuit with error $\le 1/3$.
+    $\mathrm{BPP}\subseteq\mathrm{BQP}\subseteq\mathrm{PSPACE}$.
+  \item \textbf{QMA} (Quantum Merlin-Arthur): the quantum analogue of NP;
+    YES instances have a polynomial-size quantum witness verifiable by
+    a BQP verifier.
+\end{itemize}
+Whether $\mathrm{BQP} \not\subseteq \mathrm{NP}$ or $\mathrm{BQP}\ne\mathrm{BPP}$
+remains open \cite{bernstein1997quantum}.  The believed picture is
+$\mathrm{BPP} \subsetneq \mathrm{BQP}$, with factoring as a candidate
+separation (Shor's algorithm).
+
+% ============================================================
+\section{Towards Quantum Machine Learning}
+\label{sec:qml}
+% ============================================================
+
+\subsection{Quantum Advantage in Machine Learning}
+\label{ssec:qml-advantage}
+
+Quantum machine learning (QML) investigates whether quantum computers can
+accelerate or qualitatively improve machine learning tasks
+\cite{biamonte2017quantum}.  Three criteria define meaningful quantum advantage:
+\begin{enumerate}
+  \item \textit{Physical feasibility} (with or without QEC),
+  \item \textit{Computational advantage} over the best known classical algorithm,
+  \item \textit{Industry relevance} for real-world ML tasks.
+\end{enumerate}
+Meeting all three simultaneously is an open problem.  Quantum speedups in
+supervised learning often rely on quantum RAM (QRAM) for efficient data
+loading---a hardware resource whose practical feasibility remains uncertain.
+
+\subsection{Key QML Algorithms}
+\label{ssec:qml-algorithms}
+
+\paragraph{HHL Algorithm (Linear Systems).}
+Harrow, Hassidim, and Lloyd \cite{harrow2009quantum} showed that the system
+$A\mathbf{x} = \mathbf{b}$ (sparse $A\in\mathbb{C}^{N\times N}$) can be solved
+quantumly in $O(\log N\cdot\kappa^2/\varepsilon)$ time, where $\kappa$ is the
+condition number.  The algorithm uses quantum phase estimation to encode
+eigenvalue inverses and outputs a quantum state $\ket{x}\propto A^{-1}\ket{b}$.
+
+\paragraph{Quantum Principal Component Analysis.}
+Lloyd, Mohseni, and Rebentrost \cite{lloyd2014quantum} estimated principal
+components of a density matrix $\rho$ in $O(\log N)$ time---exponentially faster
+than classical PCA under analogous QRAM assumptions.
+
+\paragraph{Quantum Support Vector Machine.}
+Rebentrost, Mohseni, and Lloyd \cite{rebentrost2014quantum} proposed a quantum
+SVM achieving $O(\log N)$ classification via HHL-based dual optimization.
+The swap test (Sec.~\ref{ssec:hadamard-test}) serves as the quantum kernel evaluator.
+
+\paragraph{Variational Quantum Algorithms.}
+VQAs use short parameterized circuits $U(\boldsymbol{\theta})$ and optimize
+$\boldsymbol{\theta}$ classically to minimize
+$C(\boldsymbol{\theta}) = \langle\psi(\boldsymbol{\theta})|
+\mathcal{O}|\psi(\boldsymbol{\theta})\rangle$ \cite{cerezo2021variational}.
+VQAs are the primary paradigm for NISQ-era QML \cite{preskill2018quantum}.
+
+\subsection{Open Questions and Future Outlook}
+\label{ssec:outlook}
+
+Despite significant theoretical progress, fundamental questions remain:
+\begin{itemize}
+  \item \textit{Dequantization}: Can classical sampling-based algorithms
+    match quantum speedups \cite{schuld2021machine}?
+  \item \textit{Barren plateaus}: Do VQA gradients vanish exponentially
+    with system size, making training intractable?
+  \item \textit{End-to-end advantage}: Is a provable, QRAM-free quantum speedup
+    achievable on relevant ML tasks?
+\end{itemize}
+Progress on these questions will determine whether QML transcends academic
+interest to become a practical technology.
+
+% ============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% ============================================================
+
+This report has developed the theoretical foundations of quantum machine learning
+from first principles.  Beginning with the postulates of quantum mechanics and the
+mathematical framework of Hilbert spaces and Dirac notation, we derived the
+quantum circuit model, established universality, proved the no-cloning theorem,
+and analyzed reversible computation and Landauer's principle.  Detailed circuit
+derivations for the Hadamard and swap tests illuminated how quantum expectation
+values and state overlaps are estimated---quantities central to kernel-based QML.
+Finally, we surveyed landmark QML algorithms (HHL, QPCA, QSVM, VQA) and
+highlighted the central open questions surrounding quantum advantage.
+
+Subsequent sections of this report (to be added as the course progresses) will
+cover quantum Fourier transform, Grover's search, quantum kernel methods, and
+variational quantum algorithms in depth.
+
+\bibliography{bibliography}
+
+\end{document}% trigger rebuild
+% trigger integrated build
+% pipeline trigger
+% permission fix trigger
+% math fix trigger
+% premium dashboard trigger
+% final pipeline fix trigger
+% npm fix trigger
+% ultimate fix trigger
+% pdf.js viewer trigger
+% final restoration trigger
+% absolute final trigger
+% optimization trigger
+% multi-job restoration trigger
+% final simple trigger

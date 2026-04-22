@@ -1,0 +1,84 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{style}[2026/03/20 Physical Review Style]
+
+% --- Metadata Capture (Title & Preprint) ---
+\newcommand{\@mytitle}{Untitled Report}
+\newcommand{\@mypreprint}{}
+
+\let\oldtitle\title
+\renewcommand{\title}[1]{\oldtitle{#1}\def\@mytitle{#1}}
+
+\let\oldpreprint\preprint
+\renewcommand{\preprint}[1]{\oldpreprint{#1}\def\@mypreprint{#1}}
+
+% --- Font & Encoding ---
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+% --- Math & Fonts (Styles only, packages moved to main.tex) ---
+\RequirePackage{eso-pic} % For centered watermark background
+
+% --- Layout Helper ---
+% RevTeX handles twocolumn and margins, but we can nudge them if needed.
+\RequirePackage{geometry}
+\geometry{
+    a4paper,
+    top=0.7in,
+    bottom=0.7in,
+    left=0.6in,
+    right=0.6in
+}
+
+% --- Headers & Footers (Two-Style System) ---
+\RequirePackage{fancyhdr}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% 1. Regular Page Style (For page 2 and onwards)
+\fancypagestyle{fancy}{
+    \fancyhf{}
+    \fancyhead[C]{\small \@mytitle}
+    \fancyfoot[L]{\small \@mypreprint}
+    \fancyfoot[C]{\small \thepage}
+    \fancyfoot[R]{\small \copyright\ Jeongbin Jo | Inspired by Physical Review (APS)}
+    \renewcommand{\headrulewidth}{0.4pt} % Thin line for regular pages
+}
+
+% 2. First Page Style (Title Page)
+\fancypagestyle{fancytitle}{
+    \fancyhf{}
+    \fancyhead[C]{%
+        \ifx\@mypreprint\@empty\else
+            \small \@mypreprint \par
+            \vskip 2pt
+            \hrule height 0.6pt \par
+        \fi
+    }
+
+    \fancyfoot[C]{\small \thepage}
+    \fancyfoot[R]{\small \copyright\ Jeongbin Jo | Inspired by Physical Review (APS)}
+    \renewcommand{\headrulewidth}{0pt}
+}
+
+% Force all default page styles to our regular 'fancy'
+\let\ps@plain\ps@fancy
+\let\ps@titlepage\ps@fancy
+\pagestyle{fancy}
+
+% --- TikZ & Figures (Declarations only, packages moved to main.tex) ---
+\newcommand{\addwatermark}{
+    \AddToShipoutPictureBG*{
+        \AtPageCenter{
+            \makebox(0,0)[c]{
+                \begin{tikzpicture}[remember picture,overlay]
+                    \node [opacity=0.08] {
+                        \includegraphics[width=\textwidth]{logo.jpg}
+                    };
+                \end{tikzpicture}
+            }
+        }
+    }
+}
+
+% --- Misc Packages (Moved to main.tex) ---
+
+\endinput
